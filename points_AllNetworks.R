@@ -1,4 +1,5 @@
-# testing contouring as mapping solution
+# analysis of point observations
+# MAC 08/27/22
 
 library(raster)
 
@@ -53,7 +54,6 @@ subDaysSp <- SpatialPoints(subDays[,2:3], proj4string=CRS(prj_dd))
 subDaysSp <- SpatialPointsDataFrame(subDaysSp, subDays)
 # crop to point density extent
 subDaysSp<-subDaysSp[complete.cases(over(subDaysSp,bounds)), ]
-
 plot(bounds)
 plot(subDaysSp, add=TRUE)
 

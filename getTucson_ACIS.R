@@ -15,7 +15,7 @@ allDates<-seq(as.Date(dateRangeStart), as.Date(dateRangeEnd),1)
 ACISbbox<-"-111.3482,31.8,-110.4693,32.6" # 
 #ACISbbox<-paste0(-114.8154,',',31.32917,',',-109.0449,',',37.00459)
 
-jsonQuery=paste0('{"bbox":"',ACISbbox,'","sdate":"',dateRangeStart,'","edate":"',dateRangeEnd,'","elems":"pcpn","meta":"name,ll"}') # or uid
+jsonQuery=paste0('{"bbox":"',ACISbbox,'","sdate":"',dateRangeStart,'","edate":"',dateRangeEnd,'","elems":[{"name":"pcpn","add":"f"}],"meta":"name,ll"}') # or uid
 out<-postForm("http://data.rcc-acis.org/MultiStnData", 
               .opts = list(postfields = jsonQuery, 
                            httpheader = c('Content-Type' = 'application/json', Accept = 'application/json')))
@@ -26,15 +26,29 @@ outACIS<-fromJSON(out)
 ll<-data.frame(matrix(unlist(outACIS$data$meta$ll), nrow=length(outACIS$data$meta$ll), byrow=T))
 meta<-outACIS$data$meta
 # get summary formatted
-allData<- data.frame(matrix(unlist(outACIS$data$data), nrow=nrow(outACIS$data), byrow=T))
+
+# deal with data flags
+dataList<-list()
+for(i in 1:length(outACIS$data$data)){
+  temp<-as.data.frame(outACIS[["data"]][["data"]][[i]])
+    temp$V1<-as.numeric(as.character(temp$V1))
+    temp$V2<-as.character(temp$V2)
+    temp$V1<-ifelse(temp$V2=="A",NA,temp$V1) # NA for accum values
+    temp$V1<-ifelse(temp$V2=="T",0,temp$V1) # NA for trace values
+    temp$V1<-ifelse(temp$V2=="S",NA,temp$V1) # NA for snow values
+    dataList[[i]]<-as.data.frame(t(temp$V1))
+}
+allData = do.call(rbind, dataList)
+
+#allData<- data.frame(matrix(unlist(outACIS$data$data), nrow=nrow(outACIS$data), byrow=T))
 colnames(allData)<-allDates
 
 # replace Traces to 0
-allData[allData == "T"] <- "0.00"
+#allData[allData == "T"] <- "0.00"
 
 # convert obs to numeric
-allData[1:ncol(allData)] <- sapply(allData[1:ncol(allData)],as.character)
-allData[1:ncol(allData)] <- sapply(allData[1:ncol(allData)],as.numeric)
+#allData[1:ncol(allData)] <- sapply(allData[1:ncol(allData)],as.character)
+#allData[1:ncol(allData)] <- sapply(allData[1:ncol(allData)],as.numeric)
 
 # add in metaData to observations
 allData<-cbind.data.frame(ll,meta$name, allData)

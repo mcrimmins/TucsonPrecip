@@ -27,6 +27,17 @@ mergedData <- merge(dataStack,gaugeStack,by="gaugeRevisionId", all.x = TRUE)
 # fix dates
 mergedData$readingDate<-as.Date(mergedData$readingDate)-1
 
+# find and replace accumulated values
+tempList<-list()
+for(i in 1:nrow(gaugeStack)){
+ temp<-subset(mergedData, gaugeRevisionId==gaugeStack$gaugeRevisionId[i])
+ temp$rainAmount[which(temp$readingDate %in% (temp$readingDate[which(temp$quality=="Absent")]+1))]<-NA
+ tempList[[i]]<-temp
+}
+mergedData = do.call(rbind, tempList)
+
+#setdiff(unique(mergedData$gaugeRevisionId),unique(test$gaugeRevisionId))
+
 #test<-mergedData[which(mergedData$readingDate=="2012-07-15"),]
 
 # add in year month
@@ -115,6 +126,69 @@ LatLons_Elevs <- get_elev_point(LatLons, prj = prj_dd, src = "epqs")
 # add elevations to gauges
 elevs<-LatLons_Elevs@data
 tucsonRain<-merge(tucsonRain,elevs, by="gaugeID", all.x = TRUE)
+
+# make sure precip is rounded to 2 digits 
+tucsonRain$precip<-round(tucsonRain$precip,2)
+
+# look for duplicate stations across networks
+library(dplyr)
+library(raster)
+gauges<-tucsonRain  %>% group_by(gaugeID) %>%
+                        summarize(lat=first(lat),
+                                  lon=first(lon),
+                                  network=first(network))
+gaugesDup<-gauges[duplicated(gauges$lat,gauges$lon),]
+tucsonRain<- subset(tucsonRain, !(gaugeID %in% gaugesDup$gaugeID))
+
+# look for station lat/lons that are close and possible duplicates
+prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+gaugesSp <- SpatialPoints(gauges[,c(3,2)], proj4string=CRS(prj_dd))
+gaugesSp <- SpatialPointsDataFrame(gaugesSp, gauges)
+
+  # https://gis.stackexchange.com/questions/351085/r-find-n-closest-points-to-each-point-in-spatialpointsdataframe
+  library(sf)
+  # convert points to sf objects
+  gaugesSp <- st_as_sf(gaugesSp)
+  # creates a matrix of distances between the points
+  dist_matrix <- st_distance(gaugesSp)
+  # replaces 0s with NA
+  diag(dist_matrix) <- NA
+  # convert matrix to data frame and set column and row names
+  dist_matrix <- data.frame(dist_matrix)
+  names(dist_matrix) <- gauges$gaugeID
+  rownames(dist_matrix) <- gauges$gaugeID
+
+  # find the 5 nearest stations and create new data frame
+  library(tidyr)
+  library(dplyr)
+  near <- dist_matrix %>% 
+    mutate(ID=rownames(.)) %>% 
+    gather('closest','dist',-ID) %>% 
+    filter(!is.na(dist)) %>% 
+    group_by(ID) %>% 
+    arrange(dist) %>% 
+    slice(1:1) %>% 
+    mutate(dist_rank=1:1)
+    # add network ids back in to near table
+    near<-merge(near, gauges, by.x="ID",by.y="gaugeID")
+    near<-merge(near, gauges, by.x="closest", by.y="gaugeID")
+    near$same<-ifelse(near$network.x==near$network.y,"yes","no")
+    # filter out nearby gauges, different networks
+    near$dist<-as.numeric(near$dist)
+    nearFilter<-subset(near, dist<=100)
+    nearFilter2<-nearFilter
+    nearFilter<-subset(nearFilter, same=="no")
+    # find gauges in same network except rainlog
+    nearFilter2<-subset(nearFilter2, same=="yes" & network.x!="rainlog")
+    # delete duplicates
+    nearFilter<-nearFilter[duplicated(nearFilter$dist),]
+    nearFilter2<-nearFilter2[duplicated(nearFilter2$dist),]
+    nearFilter<-rbind.data.frame(nearFilter, nearFilter2)
+    # pull gauges with nearby twins
+    tucsonRain<- subset(tucsonRain, !(gaugeID %in% nearFilter$ID))
+    
+# remove any days with NA
+tucsonRain<-tucsonRain[!is.na(tucsonRain$precip),]
 
 # save full data file
 save(tucsonRain, file = paste0("./data/TucsonAllNetworks_2007_2021.RData"))

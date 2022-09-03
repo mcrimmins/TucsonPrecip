@@ -50,17 +50,26 @@ reading_density <- reading_density[!duplicated(reading_density[ , c("lat", "lon"
 coordinates(reading_density) <- ~ lon + lat # Convert data frame to spatial object
 obsDensity <- rasterize(reading_density, r, "count", update = TRUE) # put point in raster
 
-resObsDens<-aggregate(obsDensity,5, fun=mean)
-plot(resObsDens)
-resObsDens[resObsDens < 18000] <- NA
-plot(resObsDens)
-resObsDens<-trim(resObsDens)
-plot(resObsDens)
-# resample to fine grid
-r<-raster(extent(resObsDens),res=0.01)
-crs(r)<-prj_dd
-resObsDens<-resample(resObsDens,r)
-plot(resObsDens)
+  # create optimal mask
+  resObsDens<-aggregate(obsDensity,5, fun=mean)
+  plot(resObsDens)
+  resObsDens[resObsDens < 18000] <- NA
+  plot(resObsDens)
+  resObsDens<-trim(resObsDens)
+  plot(resObsDens)
+  # reclassify to 1/NA
+  resObsDens<-reclassify(resObsDens,c(0,+Inf,1))
+  plot(resObsDens)
+  bounds<-rasterToPolygons(resObsDens, dissolve = TRUE)
+  plot(bounds)
+  # resample to fine grid
+  r<-raster(extent(resObsDens),res=0.01)
+  crs(r)<-prj_dd
+  resObsDens<-resample(resObsDens,r)
+  resObsDens<-reclassify(resObsDens,c(0,+Inf,1))
+  resObsDens<-mask(resObsDens, bounds)
+  plot(resObsDens)
+  plot(bounds, add=TRUE)
 #nn<-mask(nn, resObsDens)
 #####  
 
