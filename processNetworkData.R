@@ -69,6 +69,7 @@ mergedData<-mergedData[-which(grepl("out of town", mergedData$remarks, ignore.ca
 mergedData<-mergedData[-which(grepl("vacation", mergedData$remarks, ignore.case = TRUE)==TRUE),]
 mergedData<-mergedData[-which(grepl("trip", mergedData$remarks, ignore.case = TRUE)==TRUE),]
 mergedData<-mergedData[-which(grepl("total", mergedData$remarks, ignore.case = TRUE)==TRUE),]
+mergedData<-mergedData[-which(grepl("error", mergedData$remarks, ignore.case = TRUE)==TRUE),]
 # keep only Good and Trace
 mergedData<-mergedData[mergedData$quality %in% c('Good','Trace'),]
 mergedData$rainAmount<-ifelse(mergedData$quality=="Trace",0,mergedData$rainAmount)
