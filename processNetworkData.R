@@ -191,6 +191,9 @@ gaugesSp <- SpatialPointsDataFrame(gaugesSp, gauges)
 # remove any days with NA
 tucsonRain<-tucsonRain[!is.na(tucsonRain$precip),]
 
+# find any duplicate gauge/day instances
+tucsonRain<-tucsonRain[-which(duplicated(tucsonRain[,c("gaugeID","date")])==TRUE),]
+
 # save full data file
 save(tucsonRain, file = paste0("./data/TucsonAllNetworks_2007_2021.RData"))
 

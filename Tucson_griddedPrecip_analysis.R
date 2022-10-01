@@ -28,35 +28,72 @@ library(plotly)
 
 # from IDW_outliers.R
 #load("/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_allngb_errors_monsoon_2007_2021_data.RData")
-load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021_data.RData")
+#load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021_data.RData")
+load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_wGridErrors_monsoon_2007_2021_data.RData")
+
 resObsDens<-stack("/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_1km_densityMask.grd")
+
+# load supporting grids
+# load comparison grids
+prism<-stack("./gridded/Tucson_PRISM_monsoon_2007_2021.grd")
+mpe<-stack("./gridded/Tucson_MRMS_monsoon_2007_2021.grd")
+
+prism<-mask(prism, resample(resObsDens,prism))
+mpe<-mask(mpe, resample(resObsDens,mpe))
+
 tucsonRain<-tucsonRain_error
+rm(tucsonRain_error)
 tucsonRain$errorPerc<-(tucsonRain$error/tucsonRain$precip)
 
 # drop KDMA, problematic station
 tucsonRain<-subset(tucsonRain, gaugeID!="KDMA")
 
-
 # subset network if needed
 #tucsonRain<-subset(tucsonRain, network!="rainlog")
 #tucsonRain<-subset(tucsonRain, network=="acis")
 
+# calc grid error
+tucsonRain$errorMPE<-tucsonRain$precip-tucsonRain$MPE
+tucsonRain$errorPRISM<-tucsonRain$precip-tucsonRain$PRISM
+  quantile(tucsonRain$errorPRISM[tucsonRain$precip>0], c(0.05,0.5,0.95))
+  length(which(tucsonRain$errorPRISM[!is.na(tucsonRain$precip)]>=1.20))
+  length(which(tucsonRain$errorPRISM[!is.na(tucsonRain$precip)]<=-0.56))
+tucsonRain$errorPRISMperc<-tucsonRain$errorPRISM/tucsonRain$precip
+tucsonRain$errorMPEperc<-tucsonRain$errorMPE/tucsonRain$precip
+    
 # add in quality flag based on error -- predicted precip 0 based on neighbors
-tucsonRain$flag<-ifelse(tucsonRain$precip>0 & tucsonRain$error==tucsonRain$precip, 1, 0)
-tucsonRain$flag2<-ifelse(tucsonRain$precip>0.15 & tucsonRain$errorPerc>=0.85 & tucsonRain$errorPerc<=1, 1, 0)
+tucsonRain$flag<-ifelse(tucsonRain$precip>0.05 & tucsonRain$error==tucsonRain$precip, 1, 0) ## TEST WITH 0.05" 
+tucsonRain$flag2<-ifelse(tucsonRain$precip>0.15 & tucsonRain$errorPerc>=0.85 & tucsonRain$errorPerc<=1, 1, 0) ## TEST WITH precip<0.15
 #tucsonRain$flag2<-ifelse(tucsonRain$precip>0.01 & tucsonRain$errorPerc>=0.85, 1, 0)
 tucsonRain$flagSum<-tucsonRain$flag+tucsonRain$flag2
 hist(tucsonRain$errorPerc[tucsonRain$errorPerc>0])
-length(which((tucsonRain$flagSum>1)==TRUE))
+length(which((tucsonRain$flagSum>0)==TRUE))
+
+# check flag1
+temp<-subset(tucsonRain, flag2>0)
+hist(temp$precip, breaks=100)
+summary(temp$precip)
+
+# add in grid perc error flag
+tucsonRain$flagPRISM<-ifelse(tucsonRain$precip>0 & tucsonRain$errorPRISM==tucsonRain$precip, 1, 0)
+tucsonRain$flagMPE<-ifelse(tucsonRain$precip>0 & tucsonRain$errorMPE==tucsonRain$precip, 1, 0)
+length(which((tucsonRain$flagPRISM==1)==TRUE))
+
+# add in gridded data error flag
+#quantile(tucsonRain$errorPRISM[tucsonRain$precip>0], c(0.05,0.5,0.95))
+#tucsonRain$flagGridpos<-ifelse(tucsonRain$errorPRISM>1.20, 1,0)
+#tucsonRain$flagGridneg<-ifelse(tucsonRain$errorPRISM<1.20, 1,0)
+#tucsonRain$flagGrid<-ifelse(tucsonRain$errorPRISM, 1,0)
+
 
 # diagnostic plots
-p<-ggplot(subset(tucsonRain,errorPerc>0), aes(errorPerc,precip, color=error, label=date))+
-  geom_point()+
-  scale_colour_gradientn(colours=rainbow(4))+
-  geom_vline(xintercept = 0.85)
-#geom_smooth()
-#geom_vline(xintercept = 1.2)
-ggplotly(p)
+# p<-ggplot(subset(tucsonRain,errorPerc>0), aes(errorPerc,precip, color=error, label=date))+
+#   geom_point()+
+#   scale_colour_gradientn(colours=rainbow(4))+
+#   geom_vline(xintercept = 0.85)
+# #geom_smooth()
+# #geom_vline(xintercept = 1.2)
+# ggplotly(p)
 
 
 # number of flags by network
@@ -64,7 +101,7 @@ table(tucsonRain[which((tucsonRain$flag+tucsonRain$flag2>0)==TRUE),]$network)/le
 table(tucsonRain$network)/nrow(tucsonRain)
 
 # subset monsoon days
-subDays<-tucsonRain[tucsonRain$dummyDate >= "2020-06-15" & tucsonRain$dummyDate <= "2020-09-30", ] # extract just monsoon days
+subDays<-tucsonRain[tucsonRain$dummyDate >= "2020-06-01" & tucsonRain$dummyDate <= "2020-09-30", ] # extract just monsoon days
 # delete rows with NA
 subDays<-subDays[!is.na(subDays$precip),]
 # remove above elevation
@@ -83,6 +120,11 @@ subDaysSp<-subDaysSp[complete.cases(over(subDaysSp,bounds)), ]
 
 # extract DF
 subDaysDF<-subDaysSp@data
+# add in date fields
+subDaysDF$month<-as.numeric(format(subDaysDF$date,"%m"))
+subDaysDF$day<-as.numeric(format(subDaysDF$date,"%d"))
+subDaysDF$year<-as.numeric(format(subDaysDF$date,"%Y"))
+subDaysDF$doy<-as.numeric(format(subDaysDF$dummyDate,"%j"))
 
 # hist on non zero values
 hist( subDaysDF$precip[ !subDaysSp$precip==0 ])
@@ -95,14 +137,17 @@ colnames(dates)<-"ymd"
 dates<-dates[order(dates$ymd),]
 
 # find a date
-#i=which(dates=="2020/07/22" )
+#i=which(dates=="2021/08/01" )
 # run through a date range
 #idx<-which(dates>="2021-06-15" & dates<="2021-09-30")
-idx<-which(dates>="2007-06-15" & dates<="2021-09-30")
+idx<-which(dates>="2007-06-01" & dates<="2021-09-30")
 
 # daySp<-subset(subDaysSp, date=="2010/09/02")
 #   temp<-subDaysSp@data
 #   temp<-daySp@data
+
+# load in zones
+load("~/RProjects/precipPatterns/data/zones.RData")
 
 # loop through to create more daily point metrics
   pptMetrics<-list()
@@ -114,11 +159,25 @@ idx<-which(dates>="2007-06-15" & dates<="2021-09-30")
     #dayPrecip<-dayPrecip@data
     dayPrecip<-subset(dayPrecip,flag==0) # data quality flag
     dayPrecip<-subset(dayPrecip, flag2==0) # second flag
+    dayPrecip<-subset(dayPrecip, flagPRISM==0)
    
+    # check PRISM or MPE values...if all zero, set obs to zero
+    flagVal<-ifelse(sum(dayPrecip$PRISM, na.rm = TRUE)==0 & sum(dayPrecip$MPE, na.rm = TRUE)==0 , 0,1)
+    # drop non zero values if all zero
+    if(flagVal==0){
+      dayPrecip<-subset(dayPrecip, precip==0)
+    }
+    
     # calculate z-score
     dayPrecip<-dayPrecip %>% 
       mutate(zscore = (precip - mean(precip, na.rm=TRUE))/sd(precip, na.rm=TRUE))
     
+    # add zone to obs
+    dayPrecipSp <- SpatialPoints(dayPrecip[,2:3], proj4string=CRS(prj_dd))
+    dayPrecipSp <- SpatialPointsDataFrame(dayPrecipSp, dayPrecip)
+    dayPrecip<-cbind.data.frame(dayPrecip, over( dayPrecipSp , zones , fn = NULL)) 
+    
+    # save obs to list
     subDaysRev[[i]]<-dayPrecip
     
     # set 0 to NA
@@ -136,6 +195,9 @@ idx<-which(dates>="2007-06-15" & dates<="2021-09-30")
       slice(1:5)
     
     mae<-sum(abs(dayPrecip$error),na.rm=TRUE)/nrow(dayPrecip)
+    maePRISM<-sum(abs(dayPrecip$precip-dayPrecip$PRISM),na.rm=TRUE)/nrow(dayPrecip)
+    maeMPE<-sum(abs(dayPrecip$precip-dayPrecip$MPE),na.rm=TRUE)/nrow(dayPrecip)
+    
     
     pptMetrics[[i]]<-cbind.data.frame(dates[i],nrow(dayPrecip), max(dayPrecip$precip), 
                                     min(dayPrecip$precip),  
@@ -159,39 +221,216 @@ idx<-which(dates>="2007-06-15" & dates<="2021-09-30")
                                     max(dayPrecip$error, na.rm = TRUE),
                                     max(dayPrecip$zscore, na.rm = TRUE),
                                     max(dayPrecip$errorPerc, na.rm = TRUE),
-                                    mae
+                                    mae, maePRISM, maeMPE,
+                                    mean(dayPrecip$PRISM, na.rm=TRUE), sd(dayPrecip$PRISM, na.rm = TRUE),
+                                    mean(dayPrecip$MPE, na.rm=TRUE), sd(dayPrecip$MPE, na.rm = TRUE),
+                                    flagVal
                                                                       )
   }
   
   # combine list into df
   pptMetrics = do.call(rbind, pptMetrics)
   subDaysRev<-do.call(rbind, subDaysRev)
+
   # save supporting data
   colnames(pptMetrics)<-c("date","n","maxRain","minRain","meanRain","sdRain","medianRain","madRain","IQRRain","zeroRain",
                          "p50_15", "p66_30", "p90_80","p95_120","p99_200",
                          "mean_nz","sd_nz","med_nz","mad_nz","IQR_nz",
                          "top1_2","top1_3","top1_5","top1_2_ratio",
-                         "maxAbsError","maxAbsErrorPerc", "maxError", "maxZscore", "maxErrorPerc", "mae"
+                         "maxAbsError","maxAbsErrorPerc", "maxError", "maxZscore", "maxErrorPerc", "mae", "maePRISM", "maeMPE",
+                         "meanPRISM","sdPRISM", "meanMPE", "sdMPE","allZeroFlag"
                          )
   
   pptMetrics$CV<-pptMetrics$sdRain/pptMetrics$meanRain
   pptMetrics$percZero<-pptMetrics$zeroRain/pptMetrics$n
-  pptMetrics$CV_med<-pptMetrics$IQRRain/pptMetrics$medianRain
-  pptMetrics$CV_nz<-pptMetrics$sd_nz/pptMetrics$mean_nz
-  pptMetrics$CV_med_nz<-pptMetrics$IQR_nz/pptMetrics$med_nz
+  #pptMetrics$CV_med<-pptMetrics$IQRRain/pptMetrics$medianRain
+  #pptMetrics$CV_nz<-pptMetrics$sd_nz/pptMetrics$mean_nz
+  #pptMetrics$CV_med_nz<-pptMetrics$IQR_nz/pptMetrics$med_nz
   pptMetrics$nRain<-pptMetrics$n-pptMetrics$zeroRain
-  
   pptMetrics$maxErrorPerc[pptMetrics$maxErrorPerc<0]<-NA
   
+  pptMetrics$prismCV<-pptMetrics$sdPRISM/pptMetrics$meanPRISM
+  pptMetrics$mpeCV<-pptMetrics$sdMPE/pptMetrics$meanMPE
+  
+  # add in date fiels
+  pptMetrics$month<-as.numeric(format(pptMetrics$date,"%m"))
+  pptMetrics$day<-as.numeric(format(pptMetrics$date, "%d"))
+  pptMetrics$year<-as.numeric(format(pptMetrics$date, "%Y"))
+  pptMetrics$doy<-as.numeric(format(as.Date(paste0("2020-",pptMetrics$month,"-",pptMetrics$day)), "%j"))
+  
   # add mean rain day-1, day+2
-  pptMetrics$maxRain_after<-c(pptMetrics$maxRain[2:nrow(pptMetrics)],NA)
-  pptMetrics$maxRain_before<-c(NA, pptMetrics$maxRain[1:nrow(pptMetrics)-1])
-  pptMetrics$maxRain_after_diff<-pptMetrics$maxRain-pptMetrics$maxRain_after
-  pptMetrics$maxRain_before_diff<-pptMetrics$maxRain-pptMetrics$maxRain_before
+  # pptMetrics$maxRain_after<-c(pptMetrics$maxRain[2:nrow(pptMetrics)],NA)
+  # pptMetrics$maxRain_before<-c(NA, pptMetrics$maxRain[1:nrow(pptMetrics)-1])
+  # pptMetrics$maxRain_after_diff<-pptMetrics$maxRain-pptMetrics$maxRain_after
+  # pptMetrics$maxRain_before_diff<-pptMetrics$maxRain-pptMetrics$maxRain_before
   
-  # heat map of % of obs with rain
+  ##### general stats 
+  # daily/seasonal stats of counts by network
+  tempRev<-subDaysRev[!subDaysRev$precip==0,]
+  tempRev<-subDaysRev
   
-  p<-ggplot(pptMetrics, aes(CV,maxRain, color=mae, label=date))+
+  networkStat<- tempRev %>% group_by(network, year) %>%
+                summarize(n=n(),
+                          medPrec=median(precip),
+                          maxPrec=max(precip))
+  ggplot(networkStat, aes(year, n, fill=network))+
+        geom_bar(stat = 'identity')
+  
+  quantile(subDaysRev$precip[ !subDaysRev$precip==0 ], c(0.25,0.5,0.66, 0.75, 0.9, 0.95, 0.99))
+  summary(subDaysRev$precip[ !subDaysRev$precip==0 ])
+  
+  ggplot(networkStat, aes(year, maxPrec, fill=network, group=network))+
+    geom_bar(stat = 'identity',position = position_dodge())
+
+  ggplot(networkStat, aes(year, medPrec, fill=network, group=network))+
+    geom_bar(stat = 'identity',position = position_dodge())
+  
+  # rain days anywhere in network
+  raindayStats<- subDaysRev %>% group_by(date) %>%
+                  summarize(rainDay=sum(precip>0),
+                            avgPrecip=mean(precip, na.rm=TRUE),
+                            year=first(year),
+                            month=first(month))
+  raindayStats$rainDay<-ifelse(raindayStats$rainDay>0,1,0)
+  ggplot(raindayStats, aes(year, rainDay))+
+    geom_bar(stat = 'identity')
+  # average seasonal rain day count
+  mean(aggregate(raindayStats$rainDay, list(raindayStats$year), FUN=sum)$x)
+  # average season areawide precip
+  mean(aggregate(raindayStats$avgPrecip, list(raindayStats$year), FUN=sum)$x)
+  
+  
+  
+  
+  #####
+  
+  #####
+  # stats by zones
+  
+  # total obs by zones
+  table(subDaysRev$name)
+  
+  # daily summaries
+  library(dplyr)
+  dayZones<-subDaysRev %>% group_by(date,name) %>%
+                  summarize(n=n(),
+                            maxPrecip=max(precip, na.rm = TRUE),
+                            meanPrecip=mean(precip, na.rm = TRUE),
+                            percZero=sum(precip==0, na.rm = TRUE)/n(),
+                            rainDays=as.numeric(any(precip>0)),
+                            days1inch=as.numeric(any(precip>=1)))
+  dayZones$year<-as.numeric(format(dayZones$date,"%Y"))
+  
+  # summarize to annual
+  annZones<-dayZones %>% group_by(name,year) %>%
+                        summarize(sumPrecip=sum(meanPrecip, na.rm = TRUE),
+                                  avgPercZero=mean(percZero, na.rm=TRUE),
+                                  sumRainDays=sum(rainDays, na.rm = TRUE),
+                                  sumDays1inch=sum(days1inch, na.rm = TRUE))
+  avgZones<-annZones %>% group_by(name) %>%
+                        summarize(meanPrecip=mean(sumPrecip, na.rm=TRUE),
+                                  meanRainDays=mean(sumRainDays),
+                                  meanDays1inch=mean(sumDays1inch)
+                                  )
+  
+  # annual time series
+  ggplot(annZones, aes(year, sumDays1inch, fill=name, group=name))+
+    geom_bar(stat = 'identity', position = 'dodge')
+  
+  
+  # average daily gauge density by zone
+  gaugeDens<- dayZones %>% group_by(name) %>%
+                            summarize(nAvg=mean(n, na.rm=TRUE),
+                                      nMax=max(n, na.rm = TRUE),
+                                      nMin=min(n, na.rm = TRUE))
+  
+  gaugeDens$area<-(geosphere::areaPolygon(zones)*1e-6)
+  gaugeDens$densityAvg<-gaugeDens$nAvg/(geosphere::areaPolygon(zones)*1e-6)
+  gaugeDens$densityMax<-gaugeDens$nMax/(geosphere::areaPolygon(zones)*1e-6)
+  gaugeDens$densityMin<-gaugeDens$nMin/(geosphere::areaPolygon(zones)*1e-6)
+  
+  #####
+  
+  
+  
+  #####
+  # IDW grid of subDaysRev
+  # library(gstat)
+  # 
+  # precipStack<-stack() # raster stack
+  # 
+  # prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+  # r<-raster(extent(c(-111.3482, -110.4693,31.8,32.6)),res=0.01)
+  # crs(r)<-prj_dd
+  # 
+  # idx<-unique(subDaysRev$date)
+  # 
+  # # loop through days to calc grids
+  # start_time <- Sys.time()
+  # for(i in 1:length(idx)){
+  #   
+  #   dayPrecip<-subset(subDaysRev, date==dates[i])
+  #   #dayPrecip<-subset(subDays, date %in% c(dates[i], dates[i+1]))
+  #   daySp <- SpatialPoints(dayPrecip[,2:3], proj4string=CRS(prj_dd))
+  #   daySp <- SpatialPointsDataFrame(daySp, dayPrecip)
+  #   # crop to point density extent
+  #   # daySp <- crop(daySp,resObsDens)
+  #   dayPrecipDF<-daySp@data
+  #   
+  #   ##### set IDW with cross validation ----
+  #   # set idw parameters
+  #   beta<-3
+  #   neighb<-5
+  #   # IDW using gstat
+  #   idwRain <- gstat(formula=precip~1, locations=daySp, nmax=neighb, set=list(idp = beta))
+  #   idwRas <- interpolate(r, idwRain)
+  #   #plot(idwRas)
+  #   # get cross val info
+  # 
+  #   #dayPrecipDF$error2<-dayPrecipDF$precip-dayPrecipDF$pred
+  #   ######
+  #   
+  #   # add to stack
+  #   precipStack <- stack( precipStack, idwRas )
+  #   # add to list
+  # 
+  #   print(dates[i])
+  # }
+  # end_time <- Sys.time()
+  # end_time - start_time
+  # 
+  # names(precipStack)<-dates
+  # 
+  # # write raster to file
+  # writeRaster(precipStack, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/subDaysRev_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021.grd", overwrite=TRUE)
+  # 
+  # load raster
+  precipStack<-stack("/home/crimmins/RProjects/precipPatterns/interpOut/subDaysRev_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021.grd")
+  
+  resMask<-resample(resObsDens, precipStack)
+  precipStack<-mask(precipStack, resMask)
+  
+  
+  #####
+  
+  ##### add in radiosonde data from read_UWsoundings.R ---- 
+  load("~/RProjects/radiosonde/UWsoundings/KTUS_2007_2021_sounding_values.RData")
+  
+  indices<-subset(indexAll, hour=="00Z")
+    #indices$date<-indices$date-1
+    
+  mb500<-subset(mb500all, hour=="12Z")
+    mb500<-mb500[,c("date","temp500","drct500","sknt500")]  
+  mb850<-subset(mb850all, hour=="12Z")
+    mb850<-mb850[,c("date","temp850","drct850","sknt850")]
+    
+  pptMetrics<-merge(pptMetrics, indices, by="date")
+  pptMetrics<-merge(pptMetrics, mb850, by="date")
+  pptMetrics<-merge(pptMetrics, mb500, by="date")
+      
+  #####
+  
+  p<-ggplot(pptMetrics, aes(CV,maxRain, color=percZero, label=date))+
     geom_point()+
     scale_colour_gradientn(colours=rainbow(4))
     #geom_smooth()
@@ -209,24 +448,31 @@ idx<-which(dates>="2007-06-15" & dates<="2021-09-30")
   
   # look at subsets based on thresholds
   #thresh<-subset(pptMetrics, p50_15>1)
-  thresh<-subset(pptMetrics, nRain>=10)
-  thresh<-subset(thresh, top1_2_ratio<5)
-  
-  ggplot(thresh, aes(CV,maxRain, color=percZero))+
-    geom_point()+
-    scale_colour_gradientn(colours=rainbow(4))
+  # thresh<-subset(pptMetrics, nRain>=10)
+  # thresh<-subset(thresh, top1_2_ratio<5)
+  # 
+  # ggplot(thresh, aes(CV,maxRain, color=percZero))+
+  #   geom_point()+
+  #   scale_colour_gradientn(colours=rainbow(4))
     #geom_vline(xintercept = 1.2)
  
-  # filtering ideas
+  # filtering and grouping ideas
+  noRainDays<-subset(pptMetrics, percZero==1)
+  lightDays <- pptMetrics[ which(pptMetrics$p50_15==0 & pptMetrics$percZero<1), ]
+  
   # obs that are single nrain ob of day
-  subMetrics<-subset(pptMetrics, nRain>=5)
-  subMetrics<-subset(subMetrics, p50_15>=1)
+  subMetrics<-subset(pptMetrics, nRain>=5 & p50_15>=1)
+  #subMetrics<-subset(subMetrics, p50_15>=1)
   #subMetrics<-subset(subMetrics, maxError<=2)
 
+  # check to make sure all days are counted 
+  nrow(noRainDays)+nrow(lightDays)+nrow(subMetrics)==nrow(pptMetrics)
+  
+  # stats on CV
   quantile(subMetrics$CV, c(0.5,0.9,0.95))
   #subMetrics<-subset(subMetrics, CV<=quantile(subMetrics$CV, c(0.9)))
   
- p<-ggplot(subMetrics, aes(CV,maxRain, color=mae, label=date))+
+ p<-ggplot(subMetrics, aes(CV,maxRain, color=prismCV, label=date))+
     geom_point()+
     scale_colour_gradientn(colours=rainbow(4))
  ggplotly(p) 
@@ -242,39 +488,138 @@ idx<-which(dates>="2007-06-15" & dates<="2021-09-30")
    
     
     # explore day
-    dt<-"2021-08-26"
+    subMetricsObs<-subset(subDaysRev, date %in% unique(subMetrics$date))
+    
+    dt<-"2011-08-06"
     #dt<-dates[1527]
     #plot(precipStack[[which(layerInfo==dt)]])
-    temp<-subset(subDaysRev, date==dt)
-    temp<-subset(subDaysDF, date==dt)
+    #temp1<-subset(subDaysRev, date==dt)
+    #temp1<-subset(subDaysDF, date==dt)
+    temp1<-subset(subMetricsObs, date==dt)
+    # delete 0's
+    temp1<-subset(temp1, precip!=0)
+    
     #temp<-subset(temp, flag==0)
     #temp<-subset(temp, flag2==0)
     #boxplot(subset(temp,precip!=0)$precip)
     
+    
+    plot(prism[[which(dates==dt )]])
+    plot(mpe[[which(dates==dt )]])
+    
     # station labs
-    labs <- lapply(seq(nrow(temp)), function(i) {
-      paste0( '<p> <b> Station name:', temp[i, "gaugeID"], '</b></p>', 
-              '<p> Network Name:', temp[i, "network"], '</p>',
-              '<p> <b> <font color="green"> Precip (in):', temp[i, "precip"], '</b></font></p>',
-              '<p> <font color="red"> Error:', temp[i, "error"], '</font></p>',
-              '<p> <font color="red"> Error %:', temp[i, "errorPerc"], '</font></p>') 
+    labs <- lapply(seq(nrow(temp1)), function(i) {
+      paste0( '<p> <b> Station name:', temp1[i, "gaugeID"], '</b></p>', 
+              '<p> Network Name:', temp1[i, "network"], '</p>',
+              '<p> <b> <font color="green"> Precip (in):', temp1[i, "precip"], '</b></font></p>',
+              '<p> <font color="red"> Error:', temp1[i, "error"], '</font></p>',
+              '<p> <font color="red"> Error %:', temp1[i, "errorPerc"], '</font></p>') 
     })
     
     library(leaflet)
     pal <- colorNumeric(
-      palette = grDevices::colorRampPalette(c('lightblue','blue','green','red'))(length(temp$precip)), 
-      domain = temp$precip)
+      palette = grDevices::colorRampPalette(c('lightblue','blue','green','yellow','orange','red'))(length(temp1$precip)), 
+      domain = temp1$precip)
     
     leaflet() %>% addProviderTiles(providers$Esri.WorldTopoMap) %>%
       setView(-110.909479, 32.221551, zoom = 10) %>%
-      addCircleMarkers(temp$lon, temp$lat,
+      addCircleMarkers(temp1$lon, temp1$lat,
                        radius = 3,
-                       color =  pal(temp$precip),
+                       color =  pal(temp1$precip),
                        label = lapply(labs, htmltools::HTML))
      
     
 #####
 
+##### climo analysis of obs and metrics ----
+    
+# use both censored and uncensored data
+    summary(subDaysSp$precip[ !subDaysSp$precip==0 ]) 
+    summary(subDaysRev$precip[ !subDaysRev$precip==0 ])
+    # further filtered data
+    subMetricsObs<-subset(subDaysRev, date %in% unique(subMetrics$date))
+    
+    # number of dry days
+    length(which(pptMetrics$percZero==1))/nrow(pptMetrics)
+    
+    # heat map of daily metrics
+    ggplot(pptMetrics, aes(doy,year, fill=CV))+
+      geom_tile()+
+      scale_fill_distiller(palette = "YlGnBu")+
+      theme_bw()
+      
+    # daily boxplots
+    ggplot(subDaysRev, aes(dummyDate,precip, group=dummyDate))+
+      geom_boxplot()
+    
+    # stats on CV
+    summary(pptMetrics$CV)
+    summary(subMetrics$CV)
+    # swap versions of daily summaries
+    temp<-subMetrics
+    #temp<-pptMetrics
+    # 
+    qCV<-quantile(temp$CV, c(0.33,0.66))
+    qMx<-quantile(temp$maxRain, c(0.33,0.66))
+    
+    p<-ggplot(temp, aes(CV,maxRain, color=CAPE.x, label=date))+
+      geom_point()+
+      scale_colour_gradientn(colours=rainbow(4))+
+      geom_vline(xintercept = qCV[1])+
+      geom_vline(xintercept = qCV[2])+
+      geom_hline(yintercept = qMx[1])+
+      geom_hline(yintercept = qMx[2])
+    ggplotly(p) 
+    
+    # categories
+    temp$cvGroup<-cut(temp$CV, breaks=c(0,qCV[1],qCV[2],Inf),
+                      labels=c('widespread','scattered','isolated'))
+    temp$maxRainGroup<-cut(temp$maxRain, breaks=c(0,qMx[1],qMx[2],Inf),
+                      labels=c('light','moderate','heavy'))
+    temp$groups<-paste0(temp$cvGroup,"-",temp$maxRainGroup)
+    groupCounts<-as.data.frame(table(temp$groups))
+    
+    # category statistics
+    subMetricsObs<-merge(subMetricsObs, temp[,c("date","groups")], by="date")
+    
+    groupDayStats<- subMetricsObs %>% group_by(groups) %>%
+                    summarise(n=n(),
+                              meanPrecip=mean(precip, na.rm=TRUE),
+                              sdPrecip=sd(precip, na.rm = TRUE),
+                              maxPrecip=max(precip, na.rm = TRUE),
+                              zeroCount=sum(precip==0),
+                              gt1Count=sum(precip>=1)
+                              )
+    
+    groupStats<- temp %>% group_by(groups) %>%
+                  summarise(nDays=n(),
+                            meanCV=mean(CV, na.rm=TRUE),
+                            meanMaxRain=mean(maxRain, na.rm=TRUE),
+                            meanPercZero=mean(percZero, na.rm=TRUE)
+                            )
+    
+    # climo stats of groups
+    groupCounts$percent<-groupCounts$Freq/sum(groupCounts$Freq)
+    groupCounts$percFull<-groupCounts$Freq/nrow(pptMetrics)
+    # yearly stats
+    groupYear<- temp %>% group_by(year, groups) %>%
+                    summarise(n=n())
+    ggplot(groupYear, aes(year,n,fill=groups))+
+      geom_bar(stat = 'identity')
+    
+    
+    # groups vs zones
+    table(subMetricsObs$name, subMetricsObs$groups)
+    
+    # remove zeros
+    temp3<-subset(subMetricsObs, precip>0)
+    
+    zoneGroups<-temp3 %>% group_by(date, groups, name) %>%
+                                  summarise(n=n())
+    table(zoneGroups$groups, zoneGroups$name)
+    
+#####    
+    
 
 #####  analyze grids metrics ----
 
@@ -308,15 +653,91 @@ plot(max(precipStack, na.rm = TRUE))
 plot(max(precipStack2))
 
 #count wet days
-b.wet<-reclassify(precipStack,c(-Inf,1.5,0))
-b.wet<-reclassify(b.wet,c(1.5,+Inf,1))
+b.wet<-reclassify(precipStack,c(-Inf,0.15,0))
+b.wet<-reclassify(b.wet,c(0.15,+Inf,1))
 #plot(b.wet[[100]])
 #plot(sum(b.wet), zlim=c(300,700))
 hist(sum(b.wet, na.rm = TRUE))
-plot(sum(b.wet, na.rm = TRUE), zlim=c(0,15))
+plot(sum(b.wet, na.rm = TRUE),zlim=c(100,250))
 
 test<-values(sum(b.wet, na.rm = TRUE))
 tempGrid<-sum(b.wet)
+
+# annual mean
+annSum<-stackApply(precipStack, as.numeric(format(dates, "%Y")), fun=sum)
+annSum[annSum <= 0] <- NA
+annSum<-trim(annSum)
+rasterVis::levelplot(annSum, par.settings=rasterTheme(viridis::viridis_pal(option = "D")(255)),
+                     margin=FALSE, main="Precip Zones")
+meanPrecip<-calc(annSum, mean)
+rasterVis::levelplot(meanPrecip, par.settings=rasterTheme(viridis::viridis_pal(option = "D")(255)),
+                     margin=FALSE, main="Precip Zones")
+cellStats(meanPrecip, mean)
+
+
+#####
+# kmean clustering on days
+
+library(RStoolbox)
+#library(tidyr)
+#library(dplyr)
+library(parallel)
+library(rasterVis)
+library(RColorBrewer)
+
+# get finer res zones
+highRes <- raster(resolution=c(0.005,0.005), crs=proj4string(precipStack), ext=extent(precipStack))
+resPrecip<-resample(precipStack, highRes)
+
+# cluster data
+ptm <- proc.time()
+set.seed(1234)
+clusterN<-8
+unC <- unsuperClass(resPrecip, nSamples = 1000000, nClasses = clusterN, nStarts = 25, nIter = 1000, norm = FALSE) # or allGDD
+proc.time() - ptm
+
+# random colors -- https://stackoverflow.com/questions/15282580/how-to-generate-a-number-of-most-distinctive-colors-in-r
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+darkcols<-sample(col_vector, clusterN)
+
+classMap<-as.factor(unC$map)
+rat <- levels(classMap)[[1]]
+# cluster names
+rat[["cluster"]]<-rev(c("Central","Foothills","Gates Pass","Rita Ranch",
+                    "Saddlebrook","Eastside","Oro Valley","Twin Peaks"))
+
+#rat[["cluster"]] <- as.character(seq(1, clusterN, by=1))
+levels(classMap) <- rat 
+
+# create polygon
+zones<-rasterToPolygons(classMap, dissolve = TRUE)
+zones$name<-rev(c("Central","Foothills","Gates Pass","Rita Ranch",
+                  "Saddlebrook","Eastside","Oro Valley","Twin Peaks"))
+save(zones, file="~/RProjects/precipPatterns/data/zones.RData")
+
+# plot classified map
+rasterVis::levelplot(classMap, col.regions=darkcols, par.settings=list(panel.background=list(col="white")),
+          margin=FALSE, main="Precip Zones")
+
+# leaflet map
+pal <- colorNumeric(darkcols, values(classMap),
+                    na.color = "transparent")
+
+leaflet() %>% addTiles() %>%
+  addRasterImage(classMap, colors = pal, opacity = 0.3) %>%
+  addPolygons(data=zones, color = "#444444", weight = 1, smoothFactor = 0.5,
+              opacity = 1.0, fillOpacity = 0.5,
+              fillColor = NA) %>%
+  addLegend(pal = pal, values = values(classMap),
+            title = "Precip Zones")
+
+
+
+
+
+#####
+
 
 #####
 

@@ -1,6 +1,6 @@
-# get monsoon daily PRISM for Tucson area
-# adapted from ClimPlot/PRISMPrecipPerc.R
-# MAC 08/22/2022
+# get monsoon daily MRMS for Tucson area
+# adapted from ClimPlot/PRISMPrecipPerc.R, getTucsonPRISM.R
+# MAC 09/10/2022
 
 library(RCurl)
 library(jsonlite)
@@ -22,7 +22,7 @@ for(year in 2007:2021){
   ACISbbox<-"-111.3482,31.8,-110.4693,32.6"
   
   # ACIS query
-  jsonQuery=paste0('{"bbox":"',ACISbbox,'","sdate":"',dateRangeStart,'","edate":"',dateRangeEnd,'","grid":"21","elems":"pcpn","meta":"ll,elev","output":"json"}') # or uid
+  jsonQuery=paste0('{"bbox":"',ACISbbox,'","sdate":"',dateRangeStart,'","edate":"',dateRangeEnd,'","grid":"2","elems":"pcpn","meta":"ll","output":"json"}') # or uid
   #jsonQuery=paste0('{"bbox":"',ACISbbox,'","sdate":"',dateRangeStart,'","edate":"',dateRangeEnd,'","grid":"2","elems":"pcpn","meta":"ll","output":"json"}') # or uid
   
   out<-postForm("http://data.rcc-acis.org/GridData",
@@ -55,4 +55,4 @@ for(year in 2007:2021){
 }
 # ----
 
-writeRaster(allPrecip,filename=paste0("/home/crimmins/RProjects/precipPatterns/gridded/Tucson_PRISM_monsoon_2007_2021.grd"), overwrite=TRUE)
+writeRaster(allPrecip,filename=paste0("/home/crimmins/RProjects/precipPatterns/gridded/Tucson_MRMS_monsoon_2007_2021.grd"), overwrite=TRUE)
