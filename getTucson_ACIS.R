@@ -7,7 +7,7 @@ library(jsonlite)
 
 # set date ranges
 dateRangeStart="2007-01-02"
-dateRangeEnd="2022-01-01"
+dateRangeEnd="2023-01-01"
 allDates<-seq(as.Date(dateRangeStart), as.Date(dateRangeEnd),1)
 
 
@@ -59,4 +59,4 @@ colnames(allData)<-c("lon","lat","gaugeID","date","precip")
 allData$gaugeID<-as.character(allData$gaugeID)
 allData$date<-as.Date(allData$date)
 
-save(allData, file="~/RProjects/precipPatterns/data/TucsonACISObs_2007_2021.RData")
+save(allData, file="~/RProjects/precipPatterns/data/TucsonACISObs_2007_2022.RData")

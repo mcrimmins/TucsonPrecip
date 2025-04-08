@@ -8,7 +8,7 @@ library(jsonlite)
 # set date ranges
 # changed from 2007-01-01/2018-12-31 to 2007-01-02/2019-01-01
 dateRangeStart="2007-01-02"
-dateRangeEnd="2021-12-31"
+dateRangeEnd="2022-12-31"
 allDates<-seq(as.Date(dateRangeStart), as.Date(dateRangeEnd),1)
 
 # timing of query
@@ -91,4 +91,4 @@ while (done==0) {
 end_time <- Sys.time()
 end_time - start_time
 
-save(dataStack, gaugeStack, file="TucsonRainlogObs_2007_2021_allQuality.RData")
+save(dataStack, gaugeStack, file="./data/TucsonRainlogObs_2007_2022_allQuality.RData")

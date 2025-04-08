@@ -29,17 +29,40 @@ library(plotly)
 # from IDW_outliers.R
 #load("/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_allngb_errors_monsoon_2007_2021_data.RData")
 #load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021_data.RData")
-load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_wGridErrors_monsoon_2007_2021_data.RData")
+load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_wGridErrors_monsoon_2007_2022_data.RData")
 
-resObsDens<-stack("/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_1km_densityMask.grd")
+resObsDens<-stack("/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_1km_densityMask_2007_2022.grd")
+
+#####
+# use error extremes as filter, top/bottom 5% of errors, assess sensitivity with 2/5/10 tiles
+
+# tucsonRain_error$errRatio2<-tucsonRain_error$error/tucsonRain_error$precip
+# 
+# quantile(tucsonRain_error$error[tucsonRain_error$error!=0],0.98)
+# quantile(tucsonRain_error$error[tucsonRain_error$error!=0],0.02)
+# 
+# test<-tucsonRain_error[tucsonRain_error$error!=0,]
+#   summary(test$precip)  
+# test<-test[test$error>-(11.6),]
+#   test<-test[test$error<12.9,]
+# 
+# test<-subset(test, errRatio2==1)    
+# ggplot(test, aes(precip,error, color=errRatio2))+
+#   geom_point()+
+# scale_colour_gradientn(colours=rainbow(4))
+
+#####
 
 # load supporting grids
 # load comparison grids
-prism<-stack("./gridded/Tucson_PRISM_monsoon_2007_2021.grd")
-mpe<-stack("./gridded/Tucson_MRMS_monsoon_2007_2021.grd")
+prism<-stack("./gridded/Tucson_PRISM_monsoon_2007_2022.grd")
+mpe<-stack("./gridded/Tucson_MRMS_monsoon_2007_2022.grd")
 
 prism<-mask(prism, resample(resObsDens,prism))
 mpe<-mask(mpe, resample(resObsDens,mpe))
+# convert to mm
+prism<-prism*25.4
+mpe<-mpe*25.4
 
 tucsonRain<-tucsonRain_error
 rm(tucsonRain_error)
@@ -56,14 +79,21 @@ tucsonRain<-subset(tucsonRain, gaugeID!="KDMA")
 tucsonRain$errorMPE<-tucsonRain$precip-tucsonRain$MPE
 tucsonRain$errorPRISM<-tucsonRain$precip-tucsonRain$PRISM
   quantile(tucsonRain$errorPRISM[tucsonRain$precip>0], c(0.05,0.5,0.95))
-  length(which(tucsonRain$errorPRISM[!is.na(tucsonRain$precip)]>=1.20))
-  length(which(tucsonRain$errorPRISM[!is.na(tucsonRain$precip)]<=-0.56))
+  #length(which(tucsonRain$errorPRISM[!is.na(tucsonRain$precip)]>=1.20))
+  #length(which(tucsonRain$errorPRISM[!is.na(tucsonRain$precip)]<=-0.56))
 tucsonRain$errorPRISMperc<-tucsonRain$errorPRISM/tucsonRain$precip
 tucsonRain$errorMPEperc<-tucsonRain$errorMPE/tucsonRain$precip
-    
+
+# precip quantiles
+quantile(tucsonRain$precip[tucsonRain$precip>0], c(0.05,0.1,0.25,0.5,0.95))
+
+length(which(abs(tucsonRain$errorPerc)>1))
+test<-tucsonRain[which(tucsonRain$error==tucsonRain$precip),]
+
+
 # add in quality flag based on error -- predicted precip 0 based on neighbors
-tucsonRain$flag<-ifelse(tucsonRain$precip>0.05 & tucsonRain$error==tucsonRain$precip, 1, 0) ## TEST WITH 0.05" 
-tucsonRain$flag2<-ifelse(tucsonRain$precip>0.15 & tucsonRain$errorPerc>=0.85 & tucsonRain$errorPerc<=1, 1, 0) ## TEST WITH precip<0.15
+tucsonRain$flag<-ifelse(tucsonRain$precip>0 & tucsonRain$error==tucsonRain$precip, 1, 0) ## TEST WITH 1mm 
+tucsonRain$flag2<-ifelse(tucsonRain$precip>0 & tucsonRain$errorPerc>=0.85 & tucsonRain$errorPerc<=1, 1, 0) ## TEST WITH precip>3.8mm 50th tile
 #tucsonRain$flag2<-ifelse(tucsonRain$precip>0.01 & tucsonRain$errorPerc>=0.85, 1, 0)
 tucsonRain$flagSum<-tucsonRain$flag+tucsonRain$flag2
 hist(tucsonRain$errorPerc[tucsonRain$errorPerc>0])
@@ -95,6 +125,14 @@ length(which((tucsonRain$flagPRISM==1)==TRUE))
 # #geom_vline(xintercept = 1.2)
 # ggplotly(p)
 
+#####
+# flag 3 - top observations with errPerc==1
+# largest precip obs with 100% prediction error, predicted 0, but ob>0
+
+bigErr<-quantile(tucsonRain$precip[tucsonRain$errorPerc>0.9],0.5, na.rm=TRUE)
+  tucsonRain$flag3<-ifelse(tucsonRain$errorPerc>0.9 & tucsonRain$precip>=bigErr, 1, 0)
+  
+#####
 
 # number of flags by network
 table(tucsonRain[which((tucsonRain$flag+tucsonRain$flag2>0)==TRUE),]$network)/length(which((tucsonRain$flag+tucsonRain$flag2>0)==TRUE))
@@ -140,7 +178,7 @@ dates<-dates[order(dates$ymd),]
 #i=which(dates=="2021/08/01" )
 # run through a date range
 #idx<-which(dates>="2021-06-15" & dates<="2021-09-30")
-idx<-which(dates>="2007-06-01" & dates<="2021-09-30")
+idx<-which(dates>="2007-06-01" & dates<="2022-09-30")
 
 # daySp<-subset(subDaysSp, date=="2010/09/02")
 #   temp<-subDaysSp@data
@@ -157,16 +195,17 @@ load("~/RProjects/precipPatterns/data/zones.RData")
     
     dayPrecip<-subset(subDaysDF, date==dates[i])
     #dayPrecip<-dayPrecip@data
-    dayPrecip<-subset(dayPrecip,flag==0) # data quality flag
-    dayPrecip<-subset(dayPrecip, flag2==0) # second flag
-    dayPrecip<-subset(dayPrecip, flagPRISM==0)
+    #dayPrecip<-subset(dayPrecip,flag==0) # data quality flag
+    #dayPrecip<-subset(dayPrecip, flag2==0) # second flag
+    #dayPrecip<-subset(dayPrecip, flagPRISM==0)
+    #dayPrecip<-subset(dayPrecip, flag3==0)
    
     # check PRISM or MPE values...if all zero, set obs to zero
     flagVal<-ifelse(sum(dayPrecip$PRISM, na.rm = TRUE)==0 & sum(dayPrecip$MPE, na.rm = TRUE)==0 , 0,1)
     # drop non zero values if all zero
-    if(flagVal==0){
-      dayPrecip<-subset(dayPrecip, precip==0)
-    }
+    #if(flagVal==0){
+    #  dayPrecip<-subset(dayPrecip, precip==0)
+    #}
     
     # calculate z-score
     dayPrecip<-dayPrecip %>% 
@@ -175,7 +214,7 @@ load("~/RProjects/precipPatterns/data/zones.RData")
     # add zone to obs
     dayPrecipSp <- SpatialPoints(dayPrecip[,2:3], proj4string=CRS(prj_dd))
     dayPrecipSp <- SpatialPointsDataFrame(dayPrecipSp, dayPrecip)
-    dayPrecip<-cbind.data.frame(dayPrecip, over( dayPrecipSp , zones , fn = NULL)) 
+    #dayPrecip<-cbind.data.frame(dayPrecip, over( dayPrecipSp , zones , fn = NULL)) 
     
     # save obs to list
     subDaysRev[[i]]<-dayPrecip
@@ -194,21 +233,37 @@ load("~/RProjects/precipPatterns/data/zones.RData")
       #group_by(col1) %>%
       slice(1:5)
     
+    # mean of top 3 with 0's
+    top3<- dayPrecip %>%                                     
+      arrange(desc(precip)) %>%
+      #group_by(col1) %>%
+      slice(1:3)
+    
     mae<-sum(abs(dayPrecip$error),na.rm=TRUE)/nrow(dayPrecip)
     maePRISM<-sum(abs(dayPrecip$precip-dayPrecip$PRISM),na.rm=TRUE)/nrow(dayPrecip)
     maeMPE<-sum(abs(dayPrecip$precip-dayPrecip$MPE),na.rm=TRUE)/nrow(dayPrecip)
     
+    #####
+    # Moran's I on non-zero obs
+    #temp<-subset(dayPrecip, precip!=0)
+    temp<-dayPrecip
+    gauge.dists <- as.matrix(dist(cbind(temp$lon, temp$lat)))
+      gauge.dists.inv <- 1/gauge.dists
+      diag(gauge.dists.inv) <- 0
+    MI<-ape::Moran.I(temp$precip, gauge.dists.inv)$observed
+    MIpval<-ape::Moran.I(temp$precip, gauge.dists.inv)$p.value
+    #####
     
     pptMetrics[[i]]<-cbind.data.frame(dates[i],nrow(dayPrecip), max(dayPrecip$precip), 
                                     min(dayPrecip$precip),  
                                     mean(dayPrecip$precip), sd(dayPrecip$precip),
                                     median(dayPrecip$precip),mad(dayPrecip$precip),
                                     IQR(dayPrecip$precip), length(which(dayPrecip$precip==0)),
-                                    length(which(dayPrecip$precip>=0.15)),
-                                    length(which(dayPrecip$precip>=0.3)),
-                                    length(which(dayPrecip$precip>=0.8)),
-                                    length(which(dayPrecip$precip>=1.2)),
-                                    length(which(dayPrecip$precip>=2)),
+                                    length(which(dayPrecip$precip>=3.8)),
+                                    length(which(dayPrecip$precip>=7.1)),
+                                    length(which(dayPrecip$precip>=20.3)),
+                                    length(which(dayPrecip$precip>=29.2)),
+                                    length(which(dayPrecip$precip>=50.8)),
                                     mean(temp$precip, na.rm=TRUE), sd(temp$precip, na.rm = TRUE),
                                     median(temp$precip, na.rm = TRUE),mad(temp$precip, na.rm = TRUE),
                                     IQR(temp$precip, na.rm = TRUE),
@@ -224,7 +279,11 @@ load("~/RProjects/precipPatterns/data/zones.RData")
                                     mae, maePRISM, maeMPE,
                                     mean(dayPrecip$PRISM, na.rm=TRUE), sd(dayPrecip$PRISM, na.rm = TRUE),
                                     mean(dayPrecip$MPE, na.rm=TRUE), sd(dayPrecip$MPE, na.rm = TRUE),
-                                    flagVal
+                                    flagVal,
+                                    mean(top5$precip[1:3]),
+                                    mean(top3$precip[1:3]),
+                                    MI,
+                                    MIpval
                                                                       )
   }
   
@@ -234,11 +293,11 @@ load("~/RProjects/precipPatterns/data/zones.RData")
 
   # save supporting data
   colnames(pptMetrics)<-c("date","n","maxRain","minRain","meanRain","sdRain","medianRain","madRain","IQRRain","zeroRain",
-                         "p50_15", "p66_30", "p90_80","p95_120","p99_200",
+                         "p50_38", "p66_71", "p90_203","p95_292","p99_508",
                          "mean_nz","sd_nz","med_nz","mad_nz","IQR_nz",
                          "top1_2","top1_3","top1_5","top1_2_ratio",
                          "maxAbsError","maxAbsErrorPerc", "maxError", "maxZscore", "maxErrorPerc", "mae", "maePRISM", "maeMPE",
-                         "meanPRISM","sdPRISM", "meanMPE", "sdMPE","allZeroFlag"
+                         "meanPRISM","sdPRISM", "meanMPE", "sdMPE","allZeroFlag", "top3mean", "top3mean_w0", "MI", "MIpval"
                          )
   
   pptMetrics$CV<-pptMetrics$sdRain/pptMetrics$meanRain
@@ -353,14 +412,15 @@ load("~/RProjects/precipPatterns/data/zones.RData")
   
   
   
-  #####
-  # IDW grid of subDaysRev
-  # library(gstat)
-  # 
+  # ####
+  # # IDW grid of subDaysRev
+  #  library(gstat)
+  # #
   # precipStack<-stack() # raster stack
   # 
   # prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
-  # r<-raster(extent(c(-111.3482, -110.4693,31.8,32.6)),res=0.01)
+  # #r<-raster(extent(c(-111.3482, -110.4693,31.8,32.6)),res=0.01)
+  # r<-raster(extent(resObsDens),res=0.01)
   # crs(r)<-prj_dd
   # 
   # idx<-unique(subDaysRev$date)
@@ -368,7 +428,7 @@ load("~/RProjects/precipPatterns/data/zones.RData")
   # # loop through days to calc grids
   # start_time <- Sys.time()
   # for(i in 1:length(idx)){
-  #   
+  # 
   #   dayPrecip<-subset(subDaysRev, date==dates[i])
   #   #dayPrecip<-subset(subDays, date %in% c(dates[i], dates[i+1]))
   #   daySp <- SpatialPoints(dayPrecip[,2:3], proj4string=CRS(prj_dd))
@@ -376,7 +436,7 @@ load("~/RProjects/precipPatterns/data/zones.RData")
   #   # crop to point density extent
   #   # daySp <- crop(daySp,resObsDens)
   #   dayPrecipDF<-daySp@data
-  #   
+  # 
   #   ##### set IDW with cross validation ----
   #   # set idw parameters
   #   beta<-3
@@ -389,7 +449,7 @@ load("~/RProjects/precipPatterns/data/zones.RData")
   # 
   #   #dayPrecipDF$error2<-dayPrecipDF$precip-dayPrecipDF$pred
   #   ######
-  #   
+  # 
   #   # add to stack
   #   precipStack <- stack( precipStack, idwRas )
   #   # add to list
@@ -400,12 +460,12 @@ load("~/RProjects/precipPatterns/data/zones.RData")
   # end_time - start_time
   # 
   # names(precipStack)<-dates
-  # 
-  # # write raster to file
-  # writeRaster(precipStack, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/subDaysRev_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021.grd", overwrite=TRUE)
-  # 
+  # #
+  # # # write raster to file
+  #  writeRaster(precipStack, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/subDaysRev_IDW_1km_beta3_5ngb_errors_monsoon_2007_2022.grd", overwrite=TRUE)
+
   # load raster
-  precipStack<-stack("/home/crimmins/RProjects/precipPatterns/interpOut/subDaysRev_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021.grd")
+  precipStack<-stack("/home/crimmins/RProjects/precipPatterns/interpOut/subDaysRev_IDW_1km_beta3_5ngb_errors_monsoon_2007_2022.grd")
   
   resMask<-resample(resObsDens, precipStack)
   precipStack<-mask(precipStack, resMask)
@@ -414,7 +474,7 @@ load("~/RProjects/precipPatterns/data/zones.RData")
   #####
   
   ##### add in radiosonde data from read_UWsoundings.R ---- 
-  load("~/RProjects/radiosonde/UWsoundings/KTUS_2007_2021_sounding_values.RData")
+  load("~/RProjects/radiosonde/UWsoundings/KTUS_2007_2022_sounding_values.RData")
   
   indices<-subset(indexAll, hour=="00Z")
     #indices$date<-indices$date-1
@@ -430,24 +490,40 @@ load("~/RProjects/precipPatterns/data/zones.RData")
       
   #####
   
-  p<-ggplot(pptMetrics, aes(CV,maxRain, color=percZero, label=date))+
+  pptMetrics_CV<-pptMetrics[!is.na(pptMetrics$CV),]
+  
+  perc.rank <- function(x) trunc(rank(x))/length(x)
+  pptMetrics_CV$rank_CV_maxPrecip<-perc.rank(pptMetrics_CV$CV*pptMetrics_CV$maxRain)
+  pptMetrics_CV$extFlag<-pptMetrics_CV$rank_CV_maxPrecip>=0.95
+  
+  p<-ggplot(pptMetrics, aes(CV,top3mean, color=percZero, label=date))+
     geom_point()+
-    scale_colour_gradientn(colours=rainbow(4))
-    #geom_smooth()
-    #geom_vline(xintercept = 1.2)
+    scale_colour_gradientn(colours=rainbow(4))+
+    geom_smooth()
+    #geom_vline(xintercept = 5)+
+    #geom_hline(yintercept = 50)
   ggplotly(p)
+  
+  ggplot(pptMetrics, aes(x=CV, y=maxRain) ) +
+    #geom_bin2d() +
+    #stat_density_2d(aes(fill = ..level..), geom = "polygon", colour="white")+
+    #scale_fill_continuous(type = "viridis") +
+    geom_density_2d(bins=100)+
+    geom_point()+
+    theme_bw()
+  
   
     ggplot(pptMetrics, aes(sdRain,CV, color=maxRain))+
       geom_point()+
       scale_colour_gradientn(colours=rainbow(4))
     
     
-  ggplot(subset(pptMetrics,p50_15>=1), aes(CV,maxRain, color=percZero))+
+  ggplot(subset(pptMetrics,p50_38>=1), aes(CV,maxRain, color=percZero))+
     geom_point()
     #geom_vline(xintercept = 1.2)
   
   # look at subsets based on thresholds
-  #thresh<-subset(pptMetrics, p50_15>1)
+  #thresh<-subset(pptMetrics, p50_38>1)
   # thresh<-subset(pptMetrics, nRain>=10)
   # thresh<-subset(thresh, top1_2_ratio<5)
   # 
@@ -458,12 +534,13 @@ load("~/RProjects/precipPatterns/data/zones.RData")
  
   # filtering and grouping ideas
   noRainDays<-subset(pptMetrics, percZero==1)
-  lightDays <- pptMetrics[ which(pptMetrics$p50_15==0 & pptMetrics$percZero<1), ]
+  lightDays <- pptMetrics[ which(pptMetrics$p50_38==0 & pptMetrics$percZero<1), ]
   
   # obs that are single nrain ob of day
-  subMetrics<-subset(pptMetrics, nRain>=5 & p50_15>=1)
-  #subMetrics<-subset(subMetrics, p50_15>=1)
+  #subMetrics<-subset(pptMetrics, nRain>=3 & p50_38>=1)
+  #subMetrics<-subset(subMetrics, p50_38>=1)
   #subMetrics<-subset(subMetrics, maxError<=2)
+  subMetrics<-subset(pptMetrics, nRain>=3)
 
   # check to make sure all days are counted 
   nrow(noRainDays)+nrow(lightDays)+nrow(subMetrics)==nrow(pptMetrics)
@@ -472,7 +549,7 @@ load("~/RProjects/precipPatterns/data/zones.RData")
   quantile(subMetrics$CV, c(0.5,0.9,0.95))
   #subMetrics<-subset(subMetrics, CV<=quantile(subMetrics$CV, c(0.9)))
   
- p<-ggplot(subMetrics, aes(CV,maxRain, color=prismCV, label=date))+
+ p<-ggplot(subMetrics, aes(CV,top3mean, color=percZero, label=date))+
     geom_point()+
     scale_colour_gradientn(colours=rainbow(4))
  ggplotly(p) 
@@ -489,8 +566,9 @@ load("~/RProjects/precipPatterns/data/zones.RData")
     
     # explore day
     subMetricsObs<-subset(subDaysRev, date %in% unique(subMetrics$date))
+    #subMetricsObs<<-subset(subDaysRev, date %in% unique(pptMetrics$date))
     
-    dt<-"2011-08-06"
+    dt<-"2018-09-03"
     #dt<-dates[1527]
     #plot(precipStack[[which(layerInfo==dt)]])
     #temp1<-subset(subDaysRev, date==dt)
@@ -511,7 +589,7 @@ load("~/RProjects/precipPatterns/data/zones.RData")
     labs <- lapply(seq(nrow(temp1)), function(i) {
       paste0( '<p> <b> Station name:', temp1[i, "gaugeID"], '</b></p>', 
               '<p> Network Name:', temp1[i, "network"], '</p>',
-              '<p> <b> <font color="green"> Precip (in):', temp1[i, "precip"], '</b></font></p>',
+              '<p> <b> <font color="green"> Precip (mm):', temp1[i, "precip"], '</b></font></p>',
               '<p> <font color="red"> Error:', temp1[i, "error"], '</font></p>',
               '<p> <font color="red"> Error %:', temp1[i, "errorPerc"], '</font></p>') 
     })
@@ -551,18 +629,24 @@ load("~/RProjects/precipPatterns/data/zones.RData")
     # daily boxplots
     ggplot(subDaysRev, aes(dummyDate,precip, group=dummyDate))+
       geom_boxplot()
-    
+  
     # stats on CV
+  
+    library("PerformanceAnalytics")
+    my_data <- subMetrics[, c("n","maxRain","meanRain","sdRain","CV","percZero","nRain")]
+    chart.Correlation(my_data, histogram=TRUE, pch=19)    
+    
     summary(pptMetrics$CV)
     summary(subMetrics$CV)
     # swap versions of daily summaries
     temp<-subMetrics
     #temp<-pptMetrics
     # 
-    qCV<-quantile(temp$CV, c(0.33,0.66))
-    qMx<-quantile(temp$maxRain, c(0.33,0.66))
+    qCV<-quantile(temp$CV, c(0.33,0.66), na.rm=TRUE)
+    #qMx<-quantile(temp$maxRain, c(0.33,0.66))
+    qMx<-quantile(temp$top3mean, c(0.33,0.66), na.rm=TRUE)
     
-    p<-ggplot(temp, aes(CV,maxRain, color=CAPE.x, label=date))+
+    p<-ggplot(temp, aes(CV,top3mean, color=nRain, label=date))+
       geom_point()+
       scale_colour_gradientn(colours=rainbow(4))+
       geom_vline(xintercept = qCV[1])+
@@ -574,11 +658,13 @@ load("~/RProjects/precipPatterns/data/zones.RData")
     # categories
     temp$cvGroup<-cut(temp$CV, breaks=c(0,qCV[1],qCV[2],Inf),
                       labels=c('widespread','scattered','isolated'))
-    temp$maxRainGroup<-cut(temp$maxRain, breaks=c(0,qMx[1],qMx[2],Inf),
+    temp$maxRainGroup<-cut(temp$top3mean, breaks=c(0,qMx[1],qMx[2],Inf),
                       labels=c('light','moderate','heavy'))
     temp$groups<-paste0(temp$cvGroup,"-",temp$maxRainGroup)
     groupCounts<-as.data.frame(table(temp$groups))
     
+    table(temp$cvGroup)
+    table(temp$maxRainGroup)
     # category statistics
     subMetricsObs<-merge(subMetricsObs, temp[,c("date","groups")], by="date")
     
@@ -688,32 +774,57 @@ library(RColorBrewer)
 # get finer res zones
 highRes <- raster(resolution=c(0.005,0.005), crs=proj4string(precipStack), ext=extent(precipStack))
 resPrecip<-resample(precipStack, highRes)
+#resPrecip<-precipStack
+#LatLon <- stack(init(resPrecip[[1]], 'y'),init(resPrecip[[1]], 'x'))
+#resPrecip<-stack(LatLon,resPrecip)
+
+rasterOptions(progress="text")
+rsOpts(verbose=TRUE)
 
 # cluster data
 ptm <- proc.time()
-set.seed(1234)
-clusterN<-8
-unC <- unsuperClass(resPrecip, nSamples = 1000000, nClasses = clusterN, nStarts = 25, nIter = 1000, norm = FALSE) # or allGDD
+  set.seed(1234)
+  clusterN<-8
+  unC <- unsuperClass(resPrecip, nSamples = 5000000, nClasses = clusterN, nStarts = 25, nIter = 1000, norm = FALSE) # or allGDD
 proc.time() - ptm
+
+resMask<-resample(resObsDens, unC$map)
+classMap<-mask(unC$map, resMask)
+# get polygons
+#zones<-rasterToPolygons(classMap, dissolve = TRUE)
+
+# smooth regions https://gis.stackexchange.com/questions/152517/smoothing-raster-map-using-r
+#y <- disaggregate(, 5)
+#y <- focal(unC$map, w=matrix(1, 5, 5), max, na.rm=TRUE)
+#y <- focal(unC$map, w=focalWeight(unC$map, 0.015, "circle", fillNA=FALSE), max, na.rm=TRUE)
+#resMask<-resample(resObsDens, y)
+#test<-mask(y, resMask)
+#test <- focal(test, w=matrix(1, 5, 5), min, na.rm=TRUE)
+#test<-mask(y, resMask)
+
+# test<-rasterToPolygons(test, dissolve = TRUE)
+# test2<-rasterToPolygons(unC$map, dissolve = TRUE)
+# plot(test)
+# plot(test2, add=TRUE)
 
 # random colors -- https://stackoverflow.com/questions/15282580/how-to-generate-a-number-of-most-distinctive-colors-in-r
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
 darkcols<-sample(col_vector, clusterN)
 
-classMap<-as.factor(unC$map)
+classMap<-as.factor(classMap)
 rat <- levels(classMap)[[1]]
 # cluster names
-rat[["cluster"]]<-rev(c("Central","Foothills","Gates Pass","Rita Ranch",
-                    "Saddlebrook","Eastside","Oro Valley","Twin Peaks"))
+rat[["cluster"]]<-rev(c("Eastside","Oro Valley","Rita Ranch","Gates Pass",
+                        "Twin Peaks","Saddlebrook","Foothills","Central"))
 
 #rat[["cluster"]] <- as.character(seq(1, clusterN, by=1))
 levels(classMap) <- rat 
 
 # create polygon
 zones<-rasterToPolygons(classMap, dissolve = TRUE)
-zones$name<-rev(c("Central","Foothills","Gates Pass","Rita Ranch",
-                  "Saddlebrook","Eastside","Oro Valley","Twin Peaks"))
+zones$name<-rev(c("Eastside","Oro Valley","Rita Ranch","Gates Pass",
+                  "Twin Peaks","Saddlebrook","Foothills","Central"))
 save(zones, file="~/RProjects/precipPatterns/data/zones.RData")
 
 # plot classified map
@@ -721,13 +832,14 @@ rasterVis::levelplot(classMap, col.regions=darkcols, par.settings=list(panel.bac
           margin=FALSE, main="Precip Zones")
 
 # leaflet map
+library(leaflet)
 pal <- colorNumeric(darkcols, values(classMap),
                     na.color = "transparent")
 
 leaflet() %>% addTiles() %>%
-  addRasterImage(classMap, colors = pal, opacity = 0.3) %>%
+  #addRasterImage(classMap, colors = pal, opacity = 0.3) %>%
   addPolygons(data=zones, color = "#444444", weight = 1, smoothFactor = 0.5,
-              opacity = 1.0, fillOpacity = 0.5,
+              opacity = 1.0, fillOpacity = 0.1,
               fillColor = NA) %>%
   addLegend(pal = pal, values = values(classMap),
             title = "Precip Zones")

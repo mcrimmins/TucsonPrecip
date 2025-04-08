@@ -9,7 +9,7 @@ library(raster)
 # loop through each and create growing stack of cumulative precip - does not work with webservice ----
 # write to file
 allPrecip <- stack()
-for(year in 2007:2021){
+for(year in 2007:2022){
   # create current date
   dateRangeStart=paste0(year,"-06-02")
   dateRangeEnd= paste0(year,"-10-01")
@@ -55,4 +55,4 @@ for(year in 2007:2021){
 }
 # ----
 
-writeRaster(allPrecip,filename=paste0("/home/crimmins/RProjects/precipPatterns/gridded/Tucson_MRMS_monsoon_2007_2021.grd"), overwrite=TRUE)
+writeRaster(allPrecip,filename=paste0("/home/crimmins/RProjects/precipPatterns/gridded/Tucson_MRMS_monsoon_2007_2022.grd"), overwrite=TRUE)

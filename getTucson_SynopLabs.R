@@ -26,7 +26,7 @@ fullData<-list()
 bbox<-"-111.3482,31.8,-110.4693,32.6"
 
 # loop through each year
-year<-seq(2007,2021,1)
+year<-seq(2007,2022,1)
 for (i in 1:length(year)){
   # set dates for each year
   start<-paste0(year[i],"01011200")
@@ -63,4 +63,4 @@ fullData <- do.call(rbind, fullData)
   # merge network info
   fullData<-merge(fullData, networkInfo,by.x="MNET_ID",by.y="ID")
 
-save(fullData, file = paste0("./data/TucsonSynopLabs_2007_2021.RData"))
+save(fullData, file = paste0("./data/TucsonSynopLabs_2007_2022.RData"))

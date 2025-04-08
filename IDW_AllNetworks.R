@@ -18,10 +18,10 @@ RMSE <- function(residuals){
 source('cvIDW.R')
 
 # load data from processNetworkData.R
-load("~/RProjects/precipPatterns/data/TucsonAllNetworks_2007_2021.RData")
+load("~/RProjects/precipPatterns/data/TucsonAllNetworks_2007_2022.RData")
 
 # subset monsoon days
-subDays<-tucsonRain[tucsonRain$dummyDate >= "2020-06-15" & tucsonRain$dummyDate <= "2020-09-30", ] # extract just monsoon days
+subDays<-tucsonRain[tucsonRain$dummyDate >= "2020-06-01" & tucsonRain$dummyDate <= "2020-09-30", ] # extract just monsoon days
 
 # delete rows with NA
 subDays<-subDays[!is.na(subDays$precip),]
@@ -31,19 +31,27 @@ hist(subDays$elevation, breaks=50)
 subDays<-subset(subDays, elevation<=1200)
 
 ##### point density masking ----  
+obs<-subDays
+coordinates(obs) <- ~ lon + lat
+obs<-crop(obs, extent(-111.25,-110.65,32,32.6)) # crop obs down to Tucson area
+
+
 library(pointdensityP)
 # more info at https://rpubs.com/msgc/point_pattern_analysis
 # create raster
 #r<-raster(daySp,res=0.01)
 prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
-r<-raster(extent(c(-111.3482, -110.4693,31.8,32.6)),res=0.01)
+r<-raster(extent(c(-111.3482, -110.4693,31.8,32.6)),res=0.01) # 0.01
 crs(r)<-prj_dd
 
-temp<-subDays[c("date","lat","lon")]
-temp<-temp[complete.cases(temp), ]
+#temp<-subDays[c("date","lat","lon")]
+#temp<-temp[complete.cases(temp), ]
+
+temp<-cbind.data.frame(obs@data$date,obs@coords)
+  colnames(temp)[1]<-"date"
 
 reading_density <- pointdensity(df = temp, lat_col = "lat", lon_col = "lon",
-                                date_col = "date", grid_size = 5, radius = 10)
+                                date_col = "date", grid_size = 5, radius = 10) # 5, 10
 
 reading_density <- reading_density[!duplicated(reading_density[ , c("lat", "lon")]), ]
 
@@ -51,9 +59,10 @@ coordinates(reading_density) <- ~ lon + lat # Convert data frame to spatial obje
 obsDensity <- rasterize(reading_density, r, "count", update = TRUE) # put point in raster
 
   # create optimal mask
-  resObsDens<-aggregate(obsDensity,5, fun=mean)
+  plot(obsDensity)
+  resObsDens<-aggregate(obsDensity,5, fun=mean) # 5
   plot(resObsDens)
-  resObsDens[resObsDens < 18000] <- NA
+  resObsDens[resObsDens < 6000] <- NA #24000
   plot(resObsDens)
   resObsDens<-trim(resObsDens)
   plot(resObsDens)
@@ -70,7 +79,32 @@ obsDensity <- rasterize(reading_density, r, "count", update = TRUE) # put point 
   resObsDens<-mask(resObsDens, bounds)
   plot(resObsDens)
   plot(bounds, add=TRUE)
-#nn<-mask(nn, resObsDens)
+
+  plot(obs)
+  plot(bounds, add=TRUE)
+  
+  crs(obs)<-prj_dd
+  pts<-over(obs, bounds)
+  table(pts$layer)/nrow(obs@data)
+  
+  # #nn<-mask(nn, resObsDens)
+  # # plot density mask
+  # # leaflet map
+  # library(leaflet)
+  # pal <- colorNumeric("RdYlBu", values(resObsDens),
+  #                     na.color = "transparent")
+  # 
+  # leaflet() %>% addTiles() %>%
+  #   #addRasterImage(resObsDens, colors = "red", opacity = 0.5) %>%
+  #    addPolygons(data=bounds, color = "#444444", weight = 1, smoothFactor = 0.5,
+  #                opacity = 1.0, fillOpacity = 0.5,
+  #                fillColor = NA) 
+  #   # addLegend(pal = pal, values = values(resObsDens),
+  #   #           title = "Density Mask")
+  
+  writeRaster(resObsDens, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_1km_densityMask_2007_2022.grd", overwrite=TRUE)
+  
+  
 #####  
 
 # get date list from subset
@@ -82,7 +116,7 @@ dates<-dates[order(dates$ymd),]
 #i=which(dates=="2021-08-10" )
 # run through a date range
 #idx<-which(dates>="2021-06-15" & dates<="2021-09-30")
-idx<-which(dates>="2007-06-15" & dates<="2021-09-30")
+idx<-which(dates>="2007-06-15" & dates<="2022-09-30")
 
 # loop through days
 prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
@@ -119,10 +153,10 @@ for(i in idx[1]:idx[length(idx)]){
   tuneIDW <- cv.IDW(spatialDF = daySp,
                     stat.formula = formula(precip ~ 1),
                     evalGridSize = res(r)[1],
-                    seqNeighbors = c(5,50,nrow(dayPrecip)-1),
-                    #seqNeighbors = 5,
-                    seqBeta = seq(from = 1, to = 3, 1),
-                    #seqBeta = c(3),
+                    #seqNeighbors = c(5,50,nrow(dayPrecip)-1),
+                    seqNeighbors = 5,
+                    #seqBeta = seq(from = 1, to = 3, 1),
+                    seqBeta = c(3),
                     evalRaster = r,
                     verbose = TRUE)
   # save info in dataframe
@@ -149,11 +183,11 @@ names(precipStack)<-dates[idx[1]:idx[length(idx)]]
 layerInfo = do.call(rbind, infoList)
 
 # write raster to file
-writeRaster(precipStack, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_ngb5_monsoon_2007_2021.grd", overwrite=TRUE)
-writeRaster(resObsDens, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_1km_densityMask.grd", overwrite=TRUE)
+writeRaster(precipStack, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_ngb5_monsoon_2007_2022.grd", overwrite=TRUE)
+writeRaster(resObsDens, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_1km_densityMask_2007_2022.grd", overwrite=TRUE)
 # save supporting data
 colnames(layerInfo)<-c("date","n","maxRain","meanRain","sdRain","medianRain","madRain","IQRRain","zeroRain","rmse","beta","neighbors")
 
-save(layerInfo, subDays, file = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_ngb5_monsoon_2007_2021_data.RData")
+save(layerInfo, subDays, file = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_ngb5_monsoon_2007_2022_data.RData")
 
 

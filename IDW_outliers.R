@@ -15,7 +15,7 @@ library(gstat)
 #source('cvIDW.R')
 
 # load data from processNetworkData.R
-load("~/RProjects/precipPatterns/data/TucsonAllNetworks_2007_2021.RData")
+load("~/RProjects/precipPatterns/data/TucsonAllNetworks_2007_2022.RData")
 
 # subset monsoon days
 subDays<-tucsonRain[tucsonRain$dummyDate >= "2020-06-01" & tucsonRain$dummyDate <= "2020-09-30", ] # extract just monsoon days
@@ -35,9 +35,9 @@ dates<-dates[order(dates$ymd),]
 
 # find a date
 #i=which(dates=="2017-08-11" )
-# run through a date range
+# run through a daterange
 #idx<-which(dates>="2021-06-15" & dates<="2021-09-30")
-idx<-which(dates>="2007-06-01" & dates<="2021-09-30")
+idx<-which(dates>="2007-06-01" & dates<="2022-09-30")
 
 # loop through days
 # prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
@@ -92,17 +92,17 @@ end_time - start_time
 tucsonRain_error = do.call(rbind, precip_error)
 
 # write raster to file
-writeRaster(precipStack, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021.grd", overwrite=TRUE)
+writeRaster(precipStack, filename = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2022.grd", overwrite=TRUE)
 # save supporting data
-save(tucsonRain_error, file = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021_data.RData")
+save(tucsonRain_error, file = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2022_data.RData")
 
 #####
 # add in PRISM/MRMS error
-load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2021_data.RData")
+load("~/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_errors_monsoon_2007_2022_data.RData")
 
 # load comparison grids
-prism<-stack("./gridded/Tucson_PRISM_monsoon_2007_2021.grd")
-mpe<-stack("./gridded/Tucson_MRMS_monsoon_2007_2021.grd")
+prism<-stack("./gridded/Tucson_PRISM_monsoon_2007_2022.grd")
+mpe<-stack("./gridded/Tucson_MRMS_monsoon_2007_2022.grd")
 
 # get dates
 dates<-as.data.frame(unique(tucsonRain_error$date))
@@ -113,7 +113,7 @@ dates<-dates[order(dates$ymd),]
 #i=which(dates=="2017-08-11" )
 # run through a date range
 #idx<-which(dates>="2021-06-15" & dates<="2021-09-30")
-idx<-which(dates>="2007-06-01" & dates<="2021-09-30")
+idx<-which(dates>="2007-06-01" & dates<="2022-09-30")
 
 # loop through days
 # prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
@@ -154,7 +154,7 @@ end_time - start_time
 tucsonRain_error = do.call(rbind, precip_error)
 
 # save supporting data
-save(tucsonRain_error, file = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_wGridErrors_monsoon_2007_2021_data.RData")
+save(tucsonRain_error, file = "/home/crimmins/RProjects/precipPatterns/interpOut/Tucson_All_IDW_1km_beta3_5ngb_wGridErrors_monsoon_2007_2022_data.RData")
 
 #####
 

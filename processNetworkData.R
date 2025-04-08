@@ -3,7 +3,7 @@
 
 #### RAINLOG DATA ----
 # load and clean Rainlog data
-load("./data/TucsonRainlogObs_2007_2021_allQuality.RData") # from getTucsonRainObs_listAppend.R
+load("./data/TucsonRainlogObs_2007_2022_allQuality.RData") # from getTucsonRainObs_listAppend.R
 
 # add elevations to gauges
 # https://cran.r-project.org/web/packages/elevatr/vignettes/introduction_to_elevatr.html#get_point_elevation_data
@@ -87,7 +87,7 @@ rainlog$gaugeID<-as.character(rainlog$gaugeID)
 # ----- END CLEANING
 
 ##### TUCSON ACIS DATA -----
-load("~/RProjects/precipPatterns/data/TucsonACISObs_2007_2021.RData")
+load("~/RProjects/precipPatterns/data/TucsonACISObs_2007_2022.RData")
 allData <- allData[-which(allData$precip>5.24),] # trim extreme values
 allData$date<-allData$date-1 # shift date back 1 day
 # remove duplicated gauge/date entries
@@ -99,7 +99,7 @@ acis$network<-"acis"
 #####
 
 ##### TUCSON SYNOP LABS DATA ----
-load("~/RProjects/precipPatterns/data/TucsonSynopLabs_2007_2021.RData")
+load("~/RProjects/precipPatterns/data/TucsonSynopLabs_2007_2022.RData")
 fullData <- fullData[-which(fullData$total>5.24),] # trim extreme values
 fullData$precipDate<-fullData$precipDate-1 # shift date back 1 day
 
@@ -128,8 +128,11 @@ LatLons_Elevs <- get_elev_point(LatLons, prj = prj_dd, src = "epqs")
 elevs<-LatLons_Elevs@data
 tucsonRain<-merge(tucsonRain,elevs, by="gaugeID", all.x = TRUE)
 
+# convert to mm
+tucsonRain$precip<-round(tucsonRain$precip*25.4,1)
+
 # make sure precip is rounded to 2 digits 
-tucsonRain$precip<-round(tucsonRain$precip,2)
+#tucsonRain$precip<-round(tucsonRain$precip,2)
 
 # look for duplicate stations across networks
 library(dplyr)
@@ -195,7 +198,7 @@ tucsonRain<-tucsonRain[!is.na(tucsonRain$precip),]
 tucsonRain<-tucsonRain[-which(duplicated(tucsonRain[,c("gaugeID","date")])==TRUE),]
 
 # save full data file
-save(tucsonRain, file = paste0("./data/TucsonAllNetworks_2007_2021.RData"))
+save(tucsonRain, file = paste0("./data/TucsonAllNetworks_2007_2022.RData"))
 
 #####
 
